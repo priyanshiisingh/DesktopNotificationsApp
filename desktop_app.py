@@ -1,8 +1,6 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLineEdit
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLineEdit, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtGui import QIcon
 import sys
-from plyer import notification
-from onesignal_sdk.client import Client
-import sqlite3
 
 # Define the main window of the application
 class MainWindow(QMainWindow):
@@ -20,55 +18,57 @@ class MainWindow(QMainWindow):
         self.button.setGeometry(100, 80, 100, 30)
         self.button.clicked.connect(self.send_notification)
 
-        # Create a connection to the SQLite database
-        self.connection = sqlite3.connect('notifications.db')
-        self.cursor = self.connection.cursor()
+        # Create a system tray icon
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon('./Safetybug white.png'))  # Set your desired icon path here
+        self.tray_icon.setToolTip('Desktop App')
+        self.tray_icon.activated.connect(self.tray_icon_activated)
 
-        # Create the notifications table if it doesn't exist
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message TEXT
-            )
-        ''')
+        # Create a context menu for the tray icon
+        self.tray_menu = QMenu(self)
+        self.show_action = QAction('Show', self)
+        self.show_action.triggered.connect(self.show_application)
+        self.quit_action = QAction('Quit', self)
+        self.quit_action.triggered.connect(self.quit_application)
+        self.tray_menu.addAction(self.show_action)
+        self.tray_menu.addAction(self.quit_action)
+        self.tray_icon.setContextMenu(self.tray_menu)
 
     def send_notification(self):
         # Get the message from the input field
         message = self.message_input.text()
 
-        # Initialize OneSignal client with your OneSignal app ID and REST API key
-        client = Client(app_id='dc9e5f19-785f-4106-b38b-39c8a62d96c7', rest_api_key='N2U2OTNjMGItNzkzYy00ODMxLWE1NGEtNmU4NTI5ZWVkYTNk')
+        # Show tray notification
+        self.tray_icon.showMessage('New Message', message, QSystemTrayIcon.Information, 10000)
 
-        # Create a notification payload
-        notification_payload = {
-            'contents': {'en': message},  # English message content
-            'included_segments': ['All']  # Send to all subscribed segments
-        }
+    def tray_icon_activated(self, reason):
+        # Show the application window when the tray icon is clicked
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_application()
 
-        # Send the notification
-        response = client.send_notification(notification_payload)
+    def show_application(self):
+        # Show the application window
+        self.show()
 
-        # Check the status code of the response
-        if response.status_code == 200:
-            # Insert the notification into the database
-            self.cursor.execute('INSERT INTO notifications (message) VALUES (?)', (message,))
-            self.connection.commit()
-
-            # Show desktop notification
-            notification.notify(
-                title='New Message',
-                message='You have a new message: {}'.format(message),
-                app_icon=None,  # You can specify an icon path if needed
-                timeout=10  # The notification will automatically close after 10 seconds
-            )
-
-    def closeEvent(self, event):
-        # Close the database connection when the application is closed
-        self.connection.close()
+    def quit_application(self):
+        # Clean up and quit the application
+        self.tray_icon.hide()
+        QApplication.quit()
 
 # Create the application instance and run the event loop
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+
+    # Set the application icon
+    app_icon = QIcon('./Safetybug white.png')  # Set your desired icon path here
+    app.setWindowIcon(app_icon)
+
     window = MainWindow()
+
+    # Show the main window initially
     window.show()
+
+    # Show the tray icon
+    window.tray_icon.show()
+
     sys.exit(app.exec_())
